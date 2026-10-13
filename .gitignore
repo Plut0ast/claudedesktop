@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.tmp
+# per-user, created at runtime
+position.json
+settings.json
+config.json
