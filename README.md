@@ -22,15 +22,32 @@ subagent shows up as a smaller crab next to its parent while it runs.
 
 ## Install
 
-```bash
-git clone <this repo> clawd-buddy
-cd clawd-buddy
-python install.py
-```
+1. Clone the repo somewhere it can stay (the hooks point at this folder, so don't move or
+   delete it afterwards):
 
-`install.py` adds hooks to `~/.claude/settings.json` (a backup is saved as
-`settings.json.bak-clawd`). The buddy starts automatically the next time a Claude Code
-session starts or you send a prompt. To start it by hand: `pythonw buddy.pyw`.
+   ```bash
+   git clone https://github.com/Plut0ast/claudedesktop.git clawd-buddy
+   cd clawd-buddy
+   ```
+
+2. Add the Claude Code hooks:
+
+   ```bash
+   python install.py
+   ```
+
+   This adds hooks to `~/.claude/settings.json` and saves a backup of your old settings as
+   `~/.claude/settings.json.bak-clawd`. Running it again is safe: it replaces its own hooks
+   instead of adding duplicates. `python` must be on your PATH, because the hooks call it.
+
+3. Start a new Claude Code session (or send a prompt in an open one). The buddy launches
+   by itself and appears in the bottom-right corner of your screen. To start it by hand:
+
+   ```bash
+   pythonw buddy.pyw
+   ```
+
+If you move the folder, run `python install.py` again from its new location.
 
 To remove the hooks:
 
