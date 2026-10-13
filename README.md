@@ -3,13 +3,13 @@
 A tiny pixel-art Clawd that sits on top of every window on your desktop and reacts to what
 [Claude Code](https://claude.com/claude-code) is doing.
 
-| State | When | Animation |
+| State | When | What it shows |
 |---|---|---|
-| Idle | Nothing running | Breathes, blinks, looks around; dozes off after a few minutes |
-| Talking | Claude is replying or thinking | Mouth moves, speech bubble with dots |
-| Coding | Edit / Write / Bash tools | Types on a keyboard; a mini editor fills with code |
-| Waiting | Permission prompt or a question for you | Bouncing `?`, taps a foot |
-| Done | Claude finished its turn | Hops with arms up, check mark and sparkles |
+| Idle | Nothing running | Sits still and blinks |
+| Talking | Claude is replying or thinking | Three small dots above its head |
+| Coding | Edit / Write / Bash tools | Hands on a keyboard, typing |
+| Waiting | Permission prompt or a question for you | A small yellow `?` |
+| Done | Claude finished its turn | A small green check mark for a few seconds |
 
 Each busy session gets its own crab with its project folder as a name tag, and every
 subagent shows up as a smaller crab next to its parent while it runs.
@@ -58,7 +58,6 @@ python install.py --uninstall
 ## Using it
 
 - **Drag** to move it (the position is remembered).
-- **Click** a crab to make it hop.
 - **Right-click** for the menu: preview animations, change the size, reset position, quit.
 
 ## Settings

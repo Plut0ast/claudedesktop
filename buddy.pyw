@@ -2,7 +2,7 @@
 
 One crab per busy session, plus a smaller crab for each subagent while it runs.
 State comes from ~/.claude/clawd-buddy-state/*.json, written by hook.py (Claude Code hooks).
-Drag to move, click a crab to poke it, right-click for the menu.
+Drag to move, right-click for the menu.
 """
 import ctypes
 import json
@@ -30,34 +30,26 @@ TRANSP = "#ff00fe"
 ORANGE = "#d97757"
 AGENT_ORANGE = "#e8a07c"
 EYE = "#1a1a1a"
-MOUTH = "#5c2414"
 WHITE = "#fafafa"
 DARK = "#262626"
 YELLOW = "#f5c542"
 GREEN = "#4ade80"
-PANEL = "#1e1e2e"
 KB_DARK = "#3a3a44"
-KB_LIGHT = "#8a8a99"
-CODE_COLORS = ("#c792ea", "#82aaff", "#c3e88d", "#ffcb6b", "#89ddff", "#f07178")
+DIM = "#8a8a8a"
 
-GW, GH = 28, 25          # one actor's cell, in art pixels
-OX, OY = 5, GH - 10      # top-left of the crab sprite (16 wide, 10 tall incl. legs)
+GW, GH = 18, 16          # one actor's cell, in art pixels
+OX, OY = 1, GH - 10      # top-left of the crab sprite (16 wide, 10 tall incl. legs)
 FPS = 10
-DONE_SECONDS = 8          # "done" celebration length; finished subagents leave after it
+DONE_SECONDS = 8          # how long "done" shows; finished subagents leave after it
 STALE_SECONDS = 15 * 60   # talking/coding with no hook events for this long -> idle
 WAIT_STALE = 2 * 3600     # forgotten permission prompts eventually stop showing
 AGENT_STALE = 10 * 60     # subagent silent this long -> assume it's gone
-SLEEP_AFTER = 180         # idle this long -> dozes off
 STATES = ("idle", "talking", "coding", "waiting", "done")
 ACTIVE = ("talking", "coding", "waiting", "done")
 
-HOP = [0, -1, -3, -4, -4, -3, -1, 0, 0, 0]
-TALK = [1, 2, 1, 0, 2, 1, 0, 0, 1, 2, 2, 0]
-
-QMARK = [" ### ", "#   #", "    #", "  ## ", "  #  ", "     ", "  #  "]
-CHECK = ["      #", "     ##", "#   ## ", "## ##  ", " ###   ", "  #    "]
-ZED = ["###", " # ", "###"]
-SPARKLES = [(OX - 3, OY - 2), (OX + 18, OY - 4), (OX - 1, OY - 10), (OX + 16, OY - 12), (OX + 20, OY + 3)]
+# small status marks shown above the head
+QMARK = ["###", "  #", " # ", "   ", " # "]
+CHECK = ["    #", "   # ", "# #  ", " #   "]
 
 
 def set_dpi_aware():
@@ -88,11 +80,6 @@ class Pen:
                 if ch != " ":
                     self.px(x + i, y + j, 1, 1, color)
 
-    def box(self, bx, by, bw, bh, fill):
-        """Box with clipped (rounded) corners."""
-        self.px(bx + 1, by, bw - 2, bh, fill)
-        self.px(bx, by + 1, bw, bh - 2, fill)
-
 
 class Actor:
     """One crab: the main Claude of a session, or one of its subagents."""
@@ -102,173 +89,69 @@ class Actor:
         self.color = AGENT_ORANGE if agent else ORANGE
         self.state, self.since, self.t, self.clock = "idle", time.time(), 0, 0.0
         self.mtime = None
-        self.poke_t = None
-        self.look, self.look_until = 0, 0
         self.blink_at = random.randint(10, 40)
-        self.code, self.code_p = [], 0
 
     def set(self, st, ts=None):
         if st != self.state:
-            self.state, self.t, self.clock, self.poke_t = st, 0, 0.0, None
+            self.state, self.t, self.clock = st, 0, 0.0
         self.since = time.time() if ts is None else ts
 
     def age(self):
         return time.time() - self.since
 
     # ---------- body ----------
-    def crab(self, pen, dy=0, eyes="normal", arms="side", mouth=0, squash=False, tap=False):
+    def crab(self, pen, eyes="normal", typing=None):
+        """Clawd's sprite. typing = "L"/"R" lowers that arm onto the keyboard."""
         p, c = pen.px, self.color
-        x0 = OX
-        y0 = OY + dy + (1 if squash else 0)
-        feet = OY + dy + 10
-        for i, lx in enumerate((3, 5, 10, 12)):
-            bottom = feet - (1 if tap and i == 3 else 0)
-            if bottom > y0 + 7:
-                p(x0 + lx, y0 + 7, 1, bottom - (y0 + 7), c)
+        x0, y0 = OX, OY
+        for lx in (3, 5, 10, 12):
+            p(x0 + lx, y0 + 7, 1, 3, c)
         p(x0 + 2, y0, 12, 7, c)
-
-        if arms == "up":
-            p(x0, y0 - 2, 2, 2, c); p(x0 + 1, y0, 1, 3, c)
-            p(x0 + 14, y0 - 2, 2, 2, c); p(x0 + 14, y0, 1, 3, c)
-        else:
-            left = right = y0 + 3
-            if arms == "typeL":
-                left = y0 + 5
-            elif arms == "typeR":
-                right = y0 + 5
-            elif arms == "wave":
-                p(x0 + 14, y0 - 2, 2, 2, c); p(x0 + 14, y0, 1, 3, c)
-                right = None
-            p(x0, left, 2, 2, c)
-            if right is not None:
-                p(x0 + 14, right, 2, 2, c)
-
+        p(x0, y0 + (5 if typing == "L" else 3), 2, 2, c)
+        p(x0 + 14, y0 + (5 if typing == "R" else 3), 2, 2, c)
         for ex in (4, 11):
-            if eyes == "happy":
-                p(x0 + ex - 1, y0 + 3, 1, 1, EYE); p(x0 + ex, y0 + 2, 1, 1, EYE); p(x0 + ex + 1, y0 + 3, 1, 1, EYE)
-            elif eyes == "closed":
-                p(x0 + ex - (1 if ex == 4 else 0), y0 + 3, 2, 1, EYE)
-            elif eyes == "blink":
-                p(x0 + ex + self.look, y0 + 3, 1, 1, EYE)
+            if eyes == "blink":
+                p(x0 + ex, y0 + 3, 1, 1, EYE)
             else:
-                vy = {"up": 1, "down": 3}.get(eyes, 2)
-                p(x0 + ex + self.look, y0 + vy, 1, 2, EYE)
-        if mouth == 1:
-            p(x0 + 7, y0 + 5, 2, 1, MOUTH)
-        elif mouth == 2:
-            p(x0 + 6, y0 + 5, 4, 1, MOUTH)
+                p(x0 + ex, y0 + {"up": 1, "down": 3}.get(eyes, 2), 1, 2, EYE)
 
-    def update_eyes(self, choices=(0, 0, 0, -1, 1)):
-        if self.t >= self.look_until:
-            self.look = random.choice(choices)
-            self.look_until = self.t + random.randint(15, 45)
-        blinking = self.blink_at <= self.t < self.blink_at + 2
+    def blinking(self):
+        """Blink for a moment every few seconds."""
         if self.t >= self.blink_at + 2:
             self.blink_at = self.t + random.randint(25, 60)
-        return blinking
+        return self.blink_at <= self.t < self.blink_at + 2
 
     # ---------- animations ----------
     def draw(self, pen, speed=1.0):
-        if self.poke_t is not None and self.t - self.poke_t < len(HOP):
-            k = self.t - self.poke_t
-            self.crab(pen, dy=HOP[k], eyes="happy", arms="up" if HOP[k] < 0 else "side", squash=k == 7)
-        else:
-            getattr(self, "draw_" + self.state)(pen)
+        getattr(self, "draw_" + self.state)(pen)
         self.clock += speed
         self.t = int(self.clock)
 
+    def eyes(self, look="normal"):
+        return "blink" if self.blinking() else look
+
     def draw_idle(self, pen):
-        t = self.t
-        if self.age() > SLEEP_AFTER:
-            self.look = 0
-            self.crab(pen, eyes="closed", squash=(t // 15) % 2 == 0)
-            for k in range(2):
-                ph = (t + k * 20) % 40
-                pen.glyph(ZED, OX + 13 + ph // 8, OY - 2 - ph // 4, WHITE)
-            return
-        blink = self.update_eyes()
-        self.crab(pen, eyes="blink" if blink else "normal", squash=(t // 15) % 4 == 3)
+        self.crab(pen, self.eyes())
 
     def draw_talking(self, pen):
-        t = self.t
-        blink = self.update_eyes((0, 0, 1))
-        arms = "wave" if (t // 25) % 8 == 7 else "side"
-        self.crab(pen, eyes="blink" if blink else "normal", mouth=TALK[(t // 2) % len(TALK)], arms=arms)
-        bx, by, bw, bh = OX + 9, OY - 10, 14, 7
-        pen.box(bx, by, bw, bh, WHITE)
-        # tail pointing at the head
-        pen.px(bx + 1, by + bh - 1, 2, 2, WHITE)
-        pen.px(bx, by + bh + 1, 1, 1, WHITE)
+        # three dots above the head, one brighter at a time
+        self.crab(pen, self.eyes())
+        lit = (self.t // 5) % 3
         for k in range(3):
-            bounce = -1 if (t // 4) % 4 == k else 0
-            pen.px(bx + 3 + k * 3, by + 3 + bounce, 2, 2, DARK)
-
-    def rand_line(self, maxlen):
-        indent = random.choice((0, 0, 2, 2, 4))
-        line, n = [None] * indent, indent
-        while n < maxlen - 2:
-            seg = random.randint(2, 5)
-            line += [random.choice(CODE_COLORS)] * seg + [None]
-            n += seg + 1
-            if random.random() < 0.3:
-                break
-        return line[:maxlen]
+            pen.px(OX + 5 + k * 3, OY - 3, 1, 1, WHITE if k == lit else DIM)
 
     def draw_coding(self, pen):
-        t = self.t
-        self.look = 0
-        arms = "typeL" if (t // 3) % 2 else "typeR"
-        blink = self.update_eyes((0,))
-        self.crab(pen, eyes="blink" if blink else "down", arms=arms)
-        # keyboard in front
+        # hands on a keyboard, typing
+        self.crab(pen, self.eyes("down"), typing="L" if (self.t // 4) % 2 else "R")
         pen.px(OX, OY + 7, 16, 2, KB_DARK)
-        lit = (t // 3 * 5) % 7
-        for i in range(7):
-            pen.px(OX + 1 + i * 2, OY + 7, 1, 1, ORANGE if i == lit else KB_LIGHT)
-
-        # little editor window above the head, typing out code
-        bx, by, bw, bh = OX + 1, OY - 12, 18, 10
-        pen.box(bx, by, bw, bh, PANEL)
-        for i, c in enumerate(("#ff5f57", "#febc2e", "#28c840")):
-            pen.px(bx + 2 + i * 2, by + 1, 1, 1, c)
-        maxlen = bw - 4
-        if t != getattr(self, "code_t", None):  # type one character per clock tick
-            self.code_t = t
-            if not self.code or self.code_p >= len(self.code[-1]):
-                self.code = (self.code + [self.rand_line(maxlen)])[-3:]
-                self.code_p = 0
-            else:
-                self.code_p += 1
-        for row, line in enumerate(self.code):
-            shown = len(line) if row < len(self.code) - 1 else self.code_p
-            y = by + 3 + row * 2
-            for i, c in enumerate(line[:shown]):
-                if c:
-                    pen.px(bx + 2 + i, y, 1, 1, c)
-            if row == len(self.code) - 1 and (t // 3) % 2 == 0:
-                pen.px(bx + 2 + shown, y, 1, 1, WHITE)
 
     def draw_waiting(self, pen):
-        t = self.t
-        self.look = (-1, 0, 1, 0)[(t // 12) % 4]
-        blink = self.blink_at <= t < self.blink_at + 2
-        if t >= self.blink_at + 2:
-            self.blink_at = t + random.randint(25, 60)
-        self.crab(pen, eyes="blink" if blink else "up", tap=(t // 6) % 2 == 0)
-        pen.glyph(QMARK, OX + 5, OY - 10 - (t // 8) % 2, YELLOW)
+        self.crab(pen, self.eyes("up"))
+        pen.glyph(QMARK, OX + 7, OY - 6, YELLOW)
 
     def draw_done(self, pen):
-        t = self.t
-        k = t % (len(HOP) + 6)
-        k = k if k < len(HOP) else 0
-        self.crab(pen, dy=HOP[k], eyes="happy", arms="up" if HOP[k] < 0 else "side", squash=k == 7)
-        pen.glyph(CHECK, OX + 4, OY - 13, GREEN)
-        for i, (sx, sy) in enumerate(SPARKLES):
-            ph = (t // 4 + i) % 3
-            if ph == 0:
-                pen.px(sx - 1, sy, 3, 1, YELLOW); pen.px(sx, sy - 1, 1, 3, YELLOW)
-            elif ph == 1:
-                pen.px(sx, sy, 1, 1, WHITE)
+        self.crab(pen, self.eyes())
+        pen.glyph(CHECK, OX + 6, OY - 5, GREEN)
 
 
 class Buddy:
@@ -291,7 +174,6 @@ class Buddy:
         self.lonely = Actor("_idle")  # shown when nobody is busy
         self.lonely_shown = False
         self.preview, self.preview_until = [], 0
-        self.layout = []          # [(actor, x0, x1)] for click hit-testing
         self.size = (0, 0)
         self.frame = 0
         self.drag = None
@@ -422,10 +304,6 @@ class Buddy:
     def on_release(self, e):
         if self.drag and self.drag[4]:
             self.save_cfg()
-        else:
-            for actor, x0, x1 in self.layout:
-                if x0 <= e.x < x1:
-                    actor.poke_t = actor.t
         self.drag = None
 
     # ---------- state ----------
@@ -548,13 +426,11 @@ class Buddy:
             self.root.geometry(f"{w}x{h}+{self.anchor[0] - w}+{self.anchor[1] - h}")
 
         self.canvas.delete("all")
-        self.layout = []
         x = 0
         base = h - label_h
         for a, s in zip(actors, scales):
             aw = GW * s
             a.draw(Pen(self.canvas, x, base - GH * s, s), cfg["animation_speed"])
-            self.layout.append((a, x, x + aw))
             if labels and a.label:
                 text = a.label if len(a.label) <= 16 else a.label[:15] + "…"
                 cx = x + (OX + 8) * s
